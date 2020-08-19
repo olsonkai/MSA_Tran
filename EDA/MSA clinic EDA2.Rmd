@@ -1,0 +1,476 @@
+---
+title: 'Boarding Time'
+author: |
+ | Analysts: Kaitlin Olson and Nichole Carlson 
+ |
+ | Investigators: Freddi Tran and Sean Michael
+ |
+ | Report generated: `r format(Sys.Date(), '%m/%d/%Y')`
+output:
+  html_document:
+    highlight: espresso
+    number_sections: yes
+    theme: yeti
+    toc: yes
+    toc_depth: 2
+    toc_float: yes
+---
+
+```{r, echo=FALSE, out.width='70%', fig.show='hold'}
+knitr::include_graphics("sph_cida_wm_blk (002).png")
+```
+
+# Introduction
+
+We recieved one excel spreadsheet containing information about emergency department visits for 244,496 individuals during January 2013 - August 2019. 
+
+Our goal in this project is to explore the relationship between race/ethnicity, gender and age (as primary predictors), and boarding time. Before any analysis, preliminary data exploration was completed.
+
+# Methods
+
+I combined race and ethnicity to be one variable. I collapsed the age variable into different age ranges. Additionally, I collapsed the primary care provider, insurance, and primary language variables to binary variables. I classified "NULL" and "ASKED, NO PCP" as having no primary care provider, "NULL" for no insurance and then split the language variable into english speaking and non-english speaking.
+
+I created several tables, showing relationships between each of the primary predictors and the other variables in this dataset. I also created box and whisker plots to show the relationship between the primary predictors and boarding time.
+
+# Results
+
+In general, the plots created show extreme skew of the response variable, boarding time. This suggests that we would need to transform this variable.
+
+For variables that I collapsed, if there are alternative ways to collapse these variables that you would prefer, please let me know. This would be most important for the race/ethnicity variable. The way that I have combined them creates a very large variable, with several columns. Response on how to create this variable is needed, or we can leave them separate and do two separate analyses for race and ethnicity. Additionally, there are several variables that have very low counts for certain levels within the variable. Suggestions for how to collapse all variables are needed. 
+
+## Descriptitve Statistics
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+crowd <- read.csv("/Users/olsonkai/Desktop/MSA clinic data.csv")
+library(dplyr)
+library(table1)
+### don't load plyr first
+```
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+library(kableExtra)
+myd = crowd$Month.Year.Admission_Date.
+age = crowd$Age.no.PHI
+gender = crowd$Gender
+race = crowd$Race
+eth = crowd$Ethnicity
+ben = crowd$Benefit_Plan_Grouper
+arr = crowd$Arrival_Mode_Grouper
+ed = crowd$ED_Final_Disposition
+cduflag = crowd$CDU_Patient_Flag
+pcp = crowd$PCP_Grouper
+mar = crowd$Marital_Status
+sexor = crowd$Sexual_Orientation
+boardtime = crowd$Boarding_Time_Interval
+toprovtime = crowd$ED_Door_to_Provider_Time_Interval
+wrminutes = crowd$ED_Internal_Waiting_Room_Minutes
+LOS = crowd$Total_ED_LOS_Minutes
+decisionmin = crowd$ED_Door_to_Disposition_Decision_Minutes
+lang = crowd$Primary_Language
+cr = data.frame(myd, age, gender, race, eth, ben, arr, ed, cduflag, pcp, mar, sexor, boardtime, toprovtime, wrminutes, LOS, decisionmin,lang)
+```
+
+### MYD
+
+Something I noticed here was that the year 2013 has much higher averages for boarding time. Is there something that happened this year that would account for this?
+
+```{r, echo=FALSE}
+#way larger averages for early months
+myd.summary =cr %>%
+  group_by(myd) %>%
+  summarise(average = mean(boardtime), median = median(boardtime), stnd.dev = sd(boardtime), min = min(boardtime), max= max(boardtime), n=n())
+
+kable(myd.summary,format="html", col.names = c("Date", "Average", "Median", "SD", "Min", "Max", "N"), escape=F, align= "c", caption = "Relationship between date and boarding time", digits=c(0,5,5)) %>%
+  kable_styling("striped", full_width=F)
+```
+
+### Age
+
+The age range in this data set is 18-90. The mean, at 58.73 and the median, 60, are very similar. There are only 7 missing data points. The mean and median boarding times increase until the 50-59 age range and decrease.
+
+```{r, echo=FALSE}
+library(ggplot2)
+hist(age)
+cr.age = cr %>%
+  mutate(
+    age = ifelse(age >0 & age <20, "0-19", 
+                        ifelse(age >19 & age <30, "20-29",
+                               ifelse(age >29 & age <40, "30-39",
+                                      ifelse(age >39 & age <50, "40-49",
+                                             ifelse(age >49 & age <60, "50-59",
+                                                    ifelse(age >59 & age <70, "60-69",
+                                                           ifelse(age >69 & age <80,"70-79",
+                                                                  ifelse(age >79 & age <90, "80-89", "90+")))))))))
+
+agegroup.summary=cr.age %>%
+  group_by(age) %>%
+  summarise(average = mean(boardtime), median = median(boardtime), stnd.dev = sd(boardtime), min = min(boardtime), max= max(boardtime), n=n())
+
+ggplot(cr.age, aes(age, boardtime)) +
+  geom_boxplot() +
+  coord_flip()
+
+kable(agegroup.summary,format="html", col.names = c("Age (years)", "Average", "Median", "SD", "Min", "Max", "N"), escape=F, align= "c", caption = "Relationship between age and boarding time", digits=c(0,5,5)) %>%
+  kable_styling("striped", full_width=F)
+```
+
+### Gender
+
+The distribution of male and female patients is nearly equal. There are only 8 responses labeled "unknown." The mean and median are very similar for each gender, which females having slightly shorter boarding times.
+
+```{r, echo=FALSE}
+
+ggplot(cr, aes(gender, boardtime)) +
+  geom_boxplot() +
+  coord_flip()
+
+gender.summary=cr %>%
+  group_by(gender) %>%
+  summarise(average = mean(boardtime), median = median(boardtime), stnd.dev = sd(boardtime), min = min(boardtime), max= max(boardtime), n = n())
+
+kable(gender.summary,format="html", col.names = c("Gender", "Average", "Median", "SD", "Min", "Max", "N"), escape=F, align= "c", caption = "Relationship between gender and boarding time", digits=c(0,5,5)) %>%
+  kable_styling("striped", full_width=F)
+```
+
+### Race
+
+There is a large proportion of individuals in this dataset that identify as White/Caucasian, followed by "other" and then Black/African American. Black/African American individuals have the largest mean and median values for boarding time while "unspecified" individuals have the lowest boarding times. How should the *unspecified, unknown, and patient refused be combined?
+
+```{r, echo=FALSE}
+
+ggplot(cr, aes(race, boardtime))+
+  geom_boxplot()+
+  coord_flip()
+
+race.summary=cr %>%
+  group_by(race) %>%
+  summarise(average = mean(boardtime), median = median(boardtime), stnd.dev = sd(boardtime), min = min(boardtime), max= max(boardtime), n = n())
+
+kable(race.summary,format="html", col.names = c("Race", "Average", "Median", "SD", "Min", "Max", "N"), escape=F, align= "c", caption = "Relationship between race and boarding time", digits=c(0,5,5)) %>%
+  kable_styling("striped", full_width=F)
+```
+
+### Ethnicity 
+
+32652 individuals identify as Hispanic. Hispanic individuals have slightly higher means and medians for boarding times than patients that identify as Non-Hispanic. How should *unspecified, unknown and patient refused be combined? 
+
+```{r, echo=FALSE}
+eth.summary=cr %>%
+  group_by(eth) %>%
+  summarise(average = mean(boardtime), median = median(boardtime), stnd.dev = sd(boardtime), min = min(boardtime), max= max(boardtime), n = n())
+
+ggplot(cr, aes(eth, boardtime)) +
+  geom_boxplot() +
+  coord_flip()
+
+kable(eth.summary,format="html", col.names = c("Ethnicity", "Average", "Median", "SD", "Min", "Max", "N"), escape=F, align= "c", caption = "Relationship between ethnicity and boarding time", digits=c(0,5,5)) %>%
+  kable_styling("striped", full_width=F)
+```
+
+### Combining race and ethnicity
+
+Please let me know how you would like this variable to be constructed, if different than below. 
+
+```{r, echo=FALSE}
+ethrace = numeric()
+for(i in 1:length(race)){
+  ifelse(race[i] == "American Indian and Alaska Native" & eth[i] == "Hispanic", 
+         ethrace[i] <- "Hispanic American Indian and Alaska Native",
+         ifelse(race[i] == "American Indian and Alaska Native" & eth[i] == "Non-Hispanic"|
+                  race[i]=="American Indian and Alaska Native" & eth[i]=="Unknown", ethrace[i] <- "Non-Hispanic American Indian and Alaska Native",
+                ifelse(race[i] == "Asian" & eth[i] == "Hispanic", 
+                       ethrace[i] <- "Hispanic Asian",
+                       ifelse(race[i] == "Asian" & eth[i] == "Non-Hispanic" | race[i]=="Asian" & eth[i] == "Unknown", ethrace[i] <- "Non-Hispanic Asain",
+                              ifelse(race[i] == "Black or African American" & eth[i]== "Hispanic", 
+                                     ethrace[i]<- "Hispanic Black or African American",
+                                     ifelse(race[i] == "Black or African American" & eth[i]== "Non-Hispanic" | race[i] == "Black or African American" & eth[i]== "Unknown", 
+                                            ethrace[i]<- "Non-Hispanic Black or African American",
+                                            ifelse(race[i] == "More Than One Race" & eth[i]== "Hispanic", 
+                                                   ethrace[i]<- "Hispanic and More Than One Race",
+                                                   ifelse(race[i] == "More Than One Race" & eth[i]== "Non-Hispanic" |  race[i] == "More Than One Race" & eth[i]== "Unknown",
+                                                          ethrace[i]<- "Non-Hispanic and More Than One Race",
+                                                          ifelse(race[i] == "Native Hawaiian and Other Pacific Islander" & eth[i]== "Hispanic", 
+                                                                 ethrace[i]<- "Hispanic Native Hawaiian or Other Pacific Islander",
+                                                                 ifelse(race[i] == "Native Hawaiian and Other Pacific Islander" & eth[i]== "Non-Hispanic" |race[i] == "Native Hawaiian and Other Pacific Islander" & eth[i]== "Unknown" , 
+                                                                        ethrace[i]<- "Non-Hispanic Native Hawaiian or Other Pacific Islander",
+                                                                        ifelse(race[i] == "Other" & eth[i]== "Hispanic", 
+                                                                               ethrace[i]<- "Hispanic and Other Race",
+                                                                               ifelse(race[i] == "Other" & eth[i]== "Non-Hispanic" | race[i]=="Other" & eth[i]=="Unknown", 
+                                                                                      ethrace[i]<- "Non-Hispanic and Other Race",
+                                                                                      ifelse(race[i] == "White or Caucasian" & eth[i]== "Hispanic", 
+                                                                                             ethrace[i]<- "Hispanic White or Caucasian",
+                                                                                             ifelse(race[i] == "White or Caucasian" & eth[i]== "Non-Hispanic" | race[i]=="White or Caucasian" & eth[i]=="Unknown", 
+                                                                                                    ethrace[i]<- "Non-Hispanic White or Caucasian",
+                                                                                                    ifelse(race[i] == "Unknown" & eth[i]== "Hispanic", 
+                                                                                                           ethrace[i]<- "Hispanic with Unknown Race",
+                                                                                                                  ethrace[i]<- "Non-Hispanic with Unknown Race")))))))))))))))
+}
+
+cr1 = data.frame(myd, age, gender, ethrace, ben, arr, ed, cduflag, pcp, mar, sexor, boardtime, toprovtime, wrminutes, LOS, decisionmin,lang)
+
+
+ethrace.summary=cr1 %>%
+  group_by(ethrace) %>%
+  summarise(average = mean(boardtime), median = median(boardtime), stnd.dev = sd(boardtime), min = min(boardtime), max= max(boardtime), n = n())
+
+kable(ethrace.summary,format="html", col.names = c("Race/Ethnicity", "Average", "Median", "SD", "Min", "Max", "N"), escape=F, align= "c", caption = "Relationship between race/ethnicity and boarding time", digits=c(0,5,5)) %>%
+  kable_styling("striped", full_width=F)
+```
+
+### Insurance (1) vs. no insurance (0)
+
+Under then assumption that "NULL" is no insurance, there are only ~10,000 individuals that do not have insurance. Individuals that have no insurance have a lower median for boarding times than individuals that do have insurance. Please let me know if the variable should be collapsed differently. 
+
+```{r, echo=FALSE}
+insurance = numeric()
+for(i in 1:length(ben)){
+  ifelse(ben[i]=="NULL", insurance[i]<- 0, insurance[i]<- 1)
+}
+
+cr1 = data.frame(myd, age, gender, ethrace, insurance, arr, ed, cduflag, mar, sexor, boardtime, toprovtime, wrminutes, LOS, decisionmin)
+
+insurance.summary=cr1 %>%
+  group_by(insurance) %>%
+  summarise(average = mean(boardtime), median = median(boardtime), stnd.dev = sd(boardtime), min = min(boardtime), max= max(boardtime), n = n())
+
+kable(insurance.summary,format="html", col.names = c("Insurance", "Average", "Median", "SD", "Min", "Max", "N"), escape=F, align= "c", caption = "Relationship between insurance and boarding time", digits=c(0,5,5)) %>%
+  kable_styling("striped", full_width=F)
+```
+
+### Arrival 
+
+The majority of patients (142,557) were identified as walk-in and then ground EMS (99,277) for arrival. Patients that had a "police" arrival had a higher average and median boarding time than other individuals.
+
+```{r, echo=FALSE}
+arr.summary=
+  cr %>%
+  group_by(arr) %>%
+  summarise(average = mean(boardtime), median = median(boardtime), stnd.dev = sd(boardtime), min = min(boardtime), max= max(boardtime), n = n())
+
+
+kable(arr.summary,format="html", col.names = c("Mode of arrival", "Average", "Median", "SD", "Min", "Max", "N"), escape=F, align= "c", caption = "Relationship between mode of arrival and boarding time", digits=c(0,5,5)) %>%
+  kable_styling("striped", full_width=F)
+```
+
+### ED clinical disposition
+
+The majority of patients had an IP bed requested (233,799). How should other levels with only a few counts be combined? 
+
+```{r, echo=FALSE}
+ed.summary=cr %>%
+  group_by(ed) %>%
+  summarise(average = mean(boardtime), median = median(boardtime), stnd.dev = sd(boardtime), min = min(boardtime), max= max(boardtime), n=n())
+
+kable(ed.summary,format="html", col.names = c("ED clinical disposition", "Average", "Median", "SD", "Min", "Max", "N"), escape=F, align= "c", caption = "Relationship between ED clinical disposition and boarding time", digits=c(0,5,5)) %>%
+  kable_styling("striped", full_width=F)
+```
+
+### CDU patient flag
+
+Only 10,515 patients had a CDU patient flag. Individuals with the flag had a much higher average and median boarding time than individuals that did not have the flag.
+
+```{r, echo=FALSE}
+cdu.summary=cr %>%
+  group_by(cduflag) %>%
+  summarise(average = mean(boardtime), median = median(boardtime), stnd.dev = sd(boardtime), min = min(boardtime), max= max(boardtime), n = n())
+
+
+kable(cdu.summary,format="html", col.names = c("CDU patient flag", "Average", "Median", "SD", "Min", "Max", "N"), escape=F, align= "c", caption = "Relationship between CDU patient flag and boarding time", digits=c(0,5,5)) %>%
+  kable_styling("striped", full_width=F)
+```
+
+### Primary care provider (1) vs. no primary care provider (0)
+
+Under then assumption that "NULL" and "ASKED, NOPCP" are the only individuals that did not have a primary care provider, 55,839 individuals identified as not having a primary care provider. Individuals without a primary care provider had a lower median boarding time than individuals that do have a primary care provider. Please let me know if the variable should be collapsed differently. 
+
+```{r, echo=FALSE}
+
+primcare = numeric()
+for(i in 1:length(pcp)){
+  ifelse(pcp[i]=="NULL", primcare[i]<- 0,
+         ifelse(pcp[i]=="ASKED, NOPCP", primcare[i]<-0,primcare[i]<- 1))
+}
+
+pcp1 <- cbind(crowd, primcare)
+
+cr1 = data.frame(myd, age, gender, ethrace, insurance, arr, ed, cduflag, mar, sexor, boardtime, toprovtime, wrminutes, LOS, decisionmin, primcare)
+
+primcare.summary=cr1 %>%
+  group_by(primcare) %>%
+  summarise(average = mean(boardtime), median = median(boardtime), stnd.dev = sd(boardtime), min = min(boardtime), max= max(boardtime), n=n())
+
+kable(primcare.summary,format="html", col.names = c("Primary Care Provider", "Average", "Median", "SD", "Min", "Max", "N"), escape=F, align= "c", caption = "Relationship between having a primary care provider or not and boarding time", digits=c(0,5,5)) %>%
+  kable_styling("striped", full_width=F)
+```
+
+### Marital status
+
+103,686 patients identified as being married. Individuals that were legally separated had the longest average and median boarding time. Please let me know how to collapse the other levels of this variable.
+```{r, echo=FALSE}
+mar.summary=cr %>%
+  group_by(mar) %>%
+  summarise(average = mean(boardtime), median = median(boardtime), stnd.dev = sd(boardtime), min = min(boardtime), max= max(boardtime), n = n())
+
+
+kable(mar.summary,format="html", col.names = c("Marital Status", "Average", "Median", "SD", "Min", "Max", "N"), escape=F, align= "c", caption = "Relationship between marital status and boarding time", digits=c(0,5,5)) %>%
+  kable_styling("striped", full_width=F)
+```
+
+### Sexual Orientation
+
+Please let me know how to relevel this variable. As the majority of the responses (225,821) to this variable are blank, we should reconsider using it in the analysis. 
+```{r, echo=FALSE}
+sexor.summary =cr %>%
+  group_by(sexor) %>%
+  summarise(average = mean(boardtime), median = median(boardtime), stnd.dev = sd(boardtime), min = min(boardtime), max= max(boardtime), n = n())
+
+kable(sexor.summary,format="html", col.names = c("Sexual Orientation", "Average", "Median", "SD", "Min", "Max", "N"), escape=F, align= "c", caption = "Relationship between sexual orientation and boarding time", digits=c(0,5,5)) %>%
+  kable_styling("striped", full_width=F)
+```
+
+### Primary Language (english (1) vs. not (0))
+
+8,637 individuals indicated that English was not their primary language. When looking at their wait time these individuals had about a 10 minute longer boarding time, on average, than patients that identified English as their primary language. Please let me know if the variable should be collapsed differently. 
+
+```{r, echo=FALSE}
+
+primlang = numeric()
+for(i in 1:length(lang)){
+  ifelse(lang[i] == "English", primlang[i] <- 1, primlang[i]<-0)
+}
+
+cr1 = data.frame(myd, age, gender, ethrace, insurance, arr, ed, cduflag, mar, sexor, boardtime, toprovtime, wrminutes, LOS, decisionmin, primlang)
+
+primlang.summary =cr1 %>%
+  group_by(primlang) %>%
+  summarise(average = mean(boardtime), median = median(boardtime), stnd.dev = sd(boardtime), min = min(boardtime), max= max(boardtime), n = n())
+
+kable(primlang.summary,format="html", col.names = c("Primary Language", "Average", "Median", "SD", "Min", "Max", "N"), escape=F, align= "c", caption = "Relationship between primary language and boarding time", digits=c(0,5,5)) %>%
+  kable_styling("striped", full_width=F)
+```
+
+### Numeric variables
+
+As shown below, all of the numeric variables appear to be skewed, with means and medians that are not very similar. The maximum value is always quite large relative to other values.
+
+### Boarding time interval
+
+We now know that the zeroes in this dataset represent individuals who did not have the disposition "IP bed requested"/did have the disposition "IP bed requested" but did not have boarding time recorded. 
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+library(mosaic)
+favstats(boardtime)
+
+missing.bt = which(boardtime == 0 & ed == "IP Bed Requested")
+```
+
+### To provider time
+```{r, echo=FALSE}
+favstats(toprovtime)
+```
+
+### Waiting room time
+```{r, echo=FALSE}
+favstats(wrminutes)
+```
+
+### Total length of stay from door to leaving ED
+```{r, echo=FALSE}
+favstats(LOS)
+```
+
+### Arrival to decision of disposition time
+```{r, echo=FALSE}
+favstats(decisionmin)
+```
+
+## Tables
+
+### Race/Ethnicity not combined
+
+```{r, echo=FALSE}
+### combining *Unspecified, Patient Refused and Unknown in race category
+levels(race) <- c("Unknown","American Indian and Alaska Native","Asian","Black or African American",
+                 "More Than One Race","Native Hawaiian and Other Pacific Islander","Other","Unknown","Unknown",
+                 "White or Caucasian")
+
+### combining *Unspecified, Patient Refused and Unknown in ethnicity category
+levels(eth) <- c("Unknown","Hispanic","Non-Hispanic","Unknown","Unknown")
+
+
+### lables for table1
+
+label(age) = "Age (years)"
+label(gender) = "Gender"
+label(arr) = "Arrival mode grouper"
+label(ed) = "ED clinical disposition"
+label(mar) = "Marital status"
+label(sexor) = "Sexual orientation"
+label(lang) = "Primary Language"
+label(boardtime) = "Boarding time interval (min)"
+label(toprovtime) = "ED door-to-provider time interval (min)"
+label(wrminutes) = "Total time spent in any ED internal waiting area (min)"
+label(LOS) = "Total ED length of stay (min)"
+label(decisionmin) = "ED door-to-disposition decision time interval (min)"
+label(race) = "Race"
+label(eth) = "Ethnicity"
+
+cduflag <-
+  factor(cduflag,
+         labels=c("No","Yes"))
+
+primlang <- 
+  factor(primlang,
+         labels=c("English",
+                  "Non-English"))
+
+primcare <-
+  factor(primcare,
+         labels=c("No","Yes"))
+
+insurance <-
+  factor(insurance,
+         labels=c("No","Yes"))
+
+label(cduflag) = "CDU patient flag"
+label(insurance) = "Insurance"
+label(primcare) = "Primary Care Provider"
+label(primlang) = "Primary Language"
+
+table1(~ age + gender + race*eth + arr + ed + cduflag + mar + sexor + primlang + primcare + insurance +
+         toprovtime+wrminutes+LOS +decisionmin + boardtime, data=crowd, overall="Overall",
+       render.continuous=c(.="Mean (SD)"), 
+       topclass="Rtable1-shade Rtable1-grid Rtable1-zebra", 
+       droplevels = F)
+```
+
+### Stratified by Race/Ethnicity
+
+```{r, echo=FALSE, warning=FALSE,message=FALSE}
+table1(~ age + gender + arr + ed + cduflag + mar + sexor + primlang + primcare + insurance +
+         toprovtime+wrminutes+LOS +decisionmin + boardtime| race*eth, data=crowd, overall="Overall",
+       render.continuous=c(.="Mean (SD)"), 
+       topclass="Rtable1-shade Rtable1-grid Rtable1-zebra", 
+       droplevels = F)
+```
+
+### Race/Ethnicity Combined
+
+As shown, the combination of race and ethnicity produces a very large variable.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+label(ethrace) = "Race/Ethnicity"
+table1(~ ethrace + age + gender +arr + ed + cduflag + mar + sexor + primlang + primcare + insurance +
+         toprovtime+wrminutes+LOS +decisionmin + boardtime , data=crowd, overall="Overall",
+       render.continuous=c(.="Mean (SD)"), 
+       topclass="Rtable1-shade Rtable1-grid Rtable1-zebra", 
+       droplevels = F)
+```
+
+<!-- footer -->
+
+---
+
+```{r, echo=FALSE, out.width='70%', fig.show='hold'}
+knitr::include_graphics("sph_cida_wm_blk (002).png")
+```
